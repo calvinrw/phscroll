@@ -1983,7 +1983,9 @@ Overlays and text properties are taken into account as much as possible."
      ((setq ovc (phscroll-get-overlay-at pos cache))
       (pcase (phscroll-ovc-type ovc)
         ('display (cons
-                   (phscroll-display-property-width (phscroll-ovc-pvalue ovc))
+                   (phscroll-display-property-width
+                    (phscroll-ovc-pvalue ovc)
+                    (char-width (char-after (phscroll-ovc-beg ovc))))
                    (phscroll-ovc-end ovc)))
         ('invisible (cons
                      (phscroll-invisible-property-width
@@ -1996,7 +1998,7 @@ Overlays and text properties are taken into account as much as possible."
      ;; display text property
      ((setq display (get-text-property pos 'display))
       (cons
-       (phscroll-display-property-width display)
+       (phscroll-display-property-width display (char-width (char-after pos)))
        (1+ pos)))
      ;; invisible text property
      ((setq invisible (get-text-property pos 'invisible))
@@ -2009,7 +2011,11 @@ Overlays and text properties are taken into account as much as possible."
        (char-width (char-after pos))
        (1+ pos))))))
 
-(defun phscroll-display-property-width (display)
+(defun phscroll-display-property-width (display &optional base-width)
+  "Return the width in columns of text displayed with property DISPLAY.
+
+BASE-WIDTH is the width in columns of the first character covered by
+DISPLAY; it is the unit for (space :relative-width FACTOR).  Defaults to 1."
   ;; https://www.gnu.org/software/emacs/manual/html_node/elisp/Display-Property.html#Display-Property
   ;; TODO: support more formats
   (cond
@@ -2024,7 +2030,14 @@ Overlays and text properties are taken into account as much as possible."
         (+
          (phscroll-resolve-space-pixel-spec-chars (plist-get props :width))
          (let ((factor (plist-get props :relative-width)))
-           (if (numberp factor) (ceiling factor) 0))))) ;; TODO: (* factor (char-width <first char>))
+           (if (numberp factor)
+               ;; FACTOR times the width of the character, rounded to the
+               ;; nearest column.  Not `ceiling': Org pads aligned table
+               ;; fields with (space :relative-width 1.001), which displays
+               ;; one column wide; `ceiling' counted it as 2 columns,
+               ;; misaligning rows rewritten by `org-table-align'.
+               (round (* factor (or base-width 1)))
+             0)))))
      (t 0)))
    ;; unknown
    (t 0)))
